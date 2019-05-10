@@ -276,7 +276,11 @@ while (true) {
                 if (failedMoteMap.containsKey(mote)) {
                     tokenMap.put(mote, "NaN") // TODO: Replace this value
                 } else {
-                    tokenMap.put(mote, msg.replace("[INFO: TPWSN-TRICKLE] Current token: ", "")) // TODO: Replace this value
+                    if (msg.replace("Current token: ", "").length == 0) {
+                        tokenMap.put(mote, "NaN");
+                    } else {
+                        tokenMap.put(mote, msg.replace("Current token: ", "")) // TODO: Replace this value
+                    }
                 }
             }
 

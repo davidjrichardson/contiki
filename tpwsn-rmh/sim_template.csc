@@ -1,4 +1,50 @@
-/**
+<?xml version="1.0" encoding="UTF-8"?>
+<simconf>
+  <project EXPORT="discard">[APPS_DIR]/mrm</project>
+  <project EXPORT="discard">[APPS_DIR]/mspsim</project>
+  <project EXPORT="discard">[APPS_DIR]/avrora</project>
+  <project EXPORT="discard">[APPS_DIR]/serial_socket</project>
+  <project EXPORT="discard">[APPS_DIR]/powertracker</project>
+  <simulation>
+    <title>My simulation</title>
+    <randomseed>123456</randomseed>
+    <motedelay_us>1000000</motedelay_us>
+    <radiomedium>
+      org.contikios.cooja.radiomediums.UDGM
+      <transmitting_range>50.0</transmitting_range>
+      <interference_range>100.0</interference_range>
+      <success_ratio_tx>1.0</success_ratio_tx>
+      <success_ratio_rx>1.0</success_ratio_rx>
+    </radiomedium>
+    <events>
+      <logoutput>40000</logoutput>
+    </events>
+    <motetype>
+      org.contikios.cooja.mspmote.SkyMoteType
+      <identifier>sky1</identifier>
+      <description>Sky Mote Type #sky1</description>
+      <firmware EXPORT="copy">[CONFIG_DIR]/tpwsn-rmh.sky</firmware>
+      <moteinterface>org.contikios.cooja.interfaces.Position</moteinterface>
+      <moteinterface>org.contikios.cooja.interfaces.RimeAddress</moteinterface>
+      <moteinterface>org.contikios.cooja.interfaces.IPAddress</moteinterface>
+      <moteinterface>org.contikios.cooja.interfaces.Mote2MoteRelations</moteinterface>
+      <moteinterface>org.contikios.cooja.interfaces.MoteAttributes</moteinterface>
+      <moteinterface>org.contikios.cooja.mspmote.interfaces.MspClock</moteinterface>
+      <moteinterface>org.contikios.cooja.mspmote.interfaces.MspMoteID</moteinterface>
+      <moteinterface>org.contikios.cooja.mspmote.interfaces.SkyButton</moteinterface>
+      <moteinterface>org.contikios.cooja.mspmote.interfaces.SkyFlash</moteinterface>
+      <moteinterface>org.contikios.cooja.mspmote.interfaces.SkyCoffeeFilesystem</moteinterface>
+      <moteinterface>org.contikios.cooja.mspmote.interfaces.Msp802154Radio</moteinterface>
+      <moteinterface>org.contikios.cooja.mspmote.interfaces.MspSerial</moteinterface>
+      <moteinterface>org.contikios.cooja.mspmote.interfaces.SkyLED</moteinterface>
+      <moteinterface>org.contikios.cooja.mspmote.interfaces.MspDebugOutput</moteinterface>
+      <moteinterface>org.contikios.cooja.mspmote.interfaces.SkyTemperature</moteinterface>
+    </motetype>
+  </simulation>
+  <plugin>
+    org.contikios.cooja.plugins.ScriptRunner
+    <plugin_config>
+      <script>/**
  * TPWSN Rime Multihop Simulation Script
  *
  * Created by David Richardson, University of Warwick
@@ -48,8 +94,8 @@ log.log("snk: " + sinkMote + "\n");
 
 // Create a failable motes array
 var failableMotes = new ArrayList(allMotes.length - 2);
-for (var i = 0; i < allMotes.length; i++) {
-    if (i !== sourceMoteID && i !== sinkMoteID) {
+for (var i = 0; i &lt; allMotes.length; i++) {
+    if (i !== sourceMoteID &amp;&amp; i !== sinkMoteID) {
         failableMotes.add(allMotes[i]);
     }
 }
@@ -81,22 +127,22 @@ function failNode(failureMode) {
     if (terminating) return;
 
     // Check if we can fail any more nodes and return early if not
-    if ((maxFailureCount - failedMoteMap.size()) <= 0) {
+    if ((maxFailureCount - failedMoteMap.size()) &lt;= 0) {
         return;
     }
 
     // TODO: When a failure occurs:
     // * Choose a set of nodes that are relevant to the failure mode
-    // --> Temporal: Pick a node to fail at random
+    // --&gt; Temporal: Pick a node to fail at random
     // * Figure out if the failure would break network constraint(s)
     // * Choose node(s) to fail based on failure mode and number of nodes that are allowed to fail
-    // --> If the failure mode is temporal, another failure should happen shortly
+    // --&gt; If the failure mode is temporal, another failure should happen shortly
 
     var moteToFail;
     if (failureMode === "location") {
         // Get a list of candidate motes to fail
         var moteSet = new HashSet(failableMotes.size());
-        if (failedMoteMap.size() > 0) {
+        if (failedMoteMap.size() &gt; 0) {
             // Get a list of all 1-hop neighbours for all of the failed motes
             // Duplicates don't matter since set operations later will clean them up
             failedMoteMap.keySet().forEach(function(elem) {
@@ -179,11 +225,11 @@ while (true) {
     }
 
     // Figure out when its ok for the source to start the flood
-    if (mote === sourceMote && msg.indexOf('adv_packet_received') > -1) {
+    if (mote === sourceMote &amp;&amp; msg.indexOf('adv_packet_received') &gt; -1) {
         sourceNeighbours.add(msg);
     }
 
-    if (sourceNeighbours.size() >= 3 && !hasSentToken) {
+    if (sourceNeighbours.size() &gt;= 3 &amp;&amp; !hasSentToken) {
         log.log("Starting message flood on mote " + sourceMote + "\n");
         sourceMote.getInterfaces().getButton().clickButton();
 
@@ -191,10 +237,10 @@ while (true) {
     }
 
     // Keep track of messages sent
-    if (msg.indexOf('Forwarding packet to') > -1) {
+    if (msg.indexOf('Forwarding packet to') &gt; -1) {
         messagesSent++;
     }
-    if (msg.indexOf('sending neighbor advertisement with val') > -1) {
+    if (msg.indexOf('sending neighbor advertisement with val') &gt; -1) {
         announcements++;
     }
     
@@ -208,7 +254,7 @@ while (true) {
             var restoreTime = failedMoteMap.get(m);
 
             // If the node needs to be brought back online
-            if (time >= restoreTime) {
+            if (time &gt;= restoreTime) {
                 nodeGraph.toggleMote(m);
                 failableMotes.add(m);
                 log.log("Mote " + m + " is online at time " + time + "\n");
@@ -223,7 +269,7 @@ while (true) {
 
         if (failureMode === "temporal") {
             // TODO
-            // if (!failedMotes.isEmpty() && current) {
+            // if (!failedMotes.isEmpty() &amp;&amp; current) {
             //     if (random.nextInt(temporalCrashDelay) === 0) {
             //         failNode(failureMode);
             //     }
@@ -237,7 +283,7 @@ while (true) {
         // If there are no crashes, measure the time it takes to complete the sim
         if (maxFailureCount === 0) {
             // If the message is a consistency report then add it to the list of nodes with that message
-            if (msg.indexOf('multihop message received \'hello\'') > -1 || msg.indexOf('sink received \'hello\'') > -1) {
+            if (msg.indexOf('multihop message received \'hello\'') &gt; -1 || msg.indexOf('sink received \'hello\'') &gt; -1) {
                 consistentSet.add(mote);
                 tokenMap.putIfAbsent(mote, "hello");
 
@@ -246,7 +292,7 @@ while (true) {
             }
 
             // If all motes have reported consistency, report the time and end the sim
-            if (msg.indexOf('sink received \'hello\'') > -1) {
+            if (msg.indexOf('sink received \'hello\'') &gt; -1) {
                 if (DEBUG) {
                     for (var ids in outputs) {
                         log.log("Closing filewriter for id " + ids + "\n");
@@ -263,7 +309,7 @@ while (true) {
             }
         } else {
             // Otherwise, check if we are beyond the simulation stop tick to terminate the sim
-            if (maxFailureCount > 0 && simulationStopTick > 0 && time >= simulationStopTick && terminating === false) {
+            if (maxFailureCount &gt; 0 &amp;&amp; simulationStopTick &gt; 0 &amp;&amp; time &gt;= simulationStopTick &amp;&amp; terminating === false) {
                 terminating = true;
 
                 for each (var m in allMotes) write(m, "print");
@@ -308,4 +354,14 @@ while (true) {
         log.log(e);
         throw("Simulation script killed")
     }
-}
+}</script>
+      <active>true</active>
+    </plugin_config>
+    <width>600</width>
+    <z>0</z>
+    <height>700</height>
+    <location_x>450</location_x>
+    <location_y>200</location_y>
+  </plugin>
+</simconf>
+

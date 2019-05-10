@@ -147,20 +147,24 @@ function failNode(failureMode) {
  */
 function endSimulation() {
     log.log("Messages sent: " + messagesSent + "\n");
+    log.log("Announcements sent: " + announcements + "\n");
     log.log("Total crashes: " + totalCrashes + "\n");
 
     var tokenCorrect = 0;
     var incorrectTokenMotes = new ArrayList();
 
+    // Add each mote to the incorrect list
+    for each (var m in sim.getMotes()) {
+        incorrectTokenMotes.add(m);
+    }
+
     // Figure out how many motes have the correct token
     for each (var m in tokenMap.keySet()) {
         if (tokenMap.get(m).indexOf('hello') !== -1) {
             tokenCorrect++;
-        } else {
-            incorrectTokenMotes.add(m);
+            incorrectTokenMotes.remove(m);
         }
     }
-
     log.log("Motes currently failed (" + failedMoteMap.size() + "): " + failedMoteMap + "\n");
     log.log("Motes reporting correctly: " + tokenCorrect + "\n");
     log.log("Motes reporting incorrectly: " + incorrectTokenMotes + "\n");
@@ -187,13 +191,11 @@ while (true) {
         hasSentToken = true;
     }
 
-    // TODO: Track broadcast messages, announcement messages
     // Keep track of messages sent
     if (msg.indexOf('Forwarding packet to') > -1) {
         messagesSent++;
     }
-
-    if (msg.indexOf('neighbour advertisement with val') > -1) {
+    if (msg.indexOf('sending neighbor advertisement with val') > -1) {
         announcements++;
     }
     
@@ -253,6 +255,9 @@ while (true) {
                     }
                 }
 
+                consistentSet.add(mote);
+                tokenMap.putIfAbsent(mote, "hello");
+                log.log(consistentSet + "\n");
                 log.log(time + " all motes converged, closing sim\n");
 
                 endSimulation();

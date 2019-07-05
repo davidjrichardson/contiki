@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"contiki.h": "c",
+			"contiki-conf.h": "c",
+			"process.h": "c",
+			"netstack.h": "c"
+		}
+	}
+}

@@ -19,7 +19,7 @@ WRITE_OUTPUT = false;
 * simulationStopTick - The simulation tick to stop the simulation at (and start collecting data)
 * failureMode - The mote failure mode for the sim
 **/
-load("/Users/david/Projects/contiki/tpwsn-rmh/params.js");
+load("params.js");
 
 // Java types
 var ArrayList = Java.type("java.util.ArrayList");
@@ -65,6 +65,8 @@ if (WRITE_OUTPUT) {
 var sourceNeighbours = new ArrayList();
 var tokenMap = new HashMap(allMotes.length);
 var consistentSet = new HashSet(allMotes.length);
+var cumilativeCoverage = new ArrayList(allMotes.length);
+cumilativeCoverage.add(sourceMote); // Add the source to the coverage list
 var messagesSent = 0;
 var announcements = 0;
 var totalCrashes = 0;
@@ -136,6 +138,10 @@ function failNode(failureMode) {
     failableMotes.remove(moteToFail);
     failedMoteMap.put(moteToFail, timeOfRestart);
     // log.log(failedMoteMap + "\n\n\n");
+    if (cumilativeCoverage.contains(moteToFail)) {
+        cumilativeCoverage.remove(moteToFail);
+        log.log("Nodes covered: " + cumilativeCoverage.size() +" at time " + time + "\n");
+    }
     write(moteToFail, "sleep " + moteRecoveryDelay);
     totalCrashes++;
 }
@@ -196,6 +202,11 @@ while (true) {
     }
     if (msg.indexOf('sending neighbor advertisement with val') > -1) {
         announcements++;
+    }
+
+    if (msg.indexOf('multihop message received') > -1 && !cumilativeCoverage.contains(mote)) {
+        cumilativeCoverage.add(mote);
+        log.log("Nodes covered: " + cumilativeCoverage.size() +" at time " + time + "\n");
     }
     
     try {

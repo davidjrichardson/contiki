@@ -23,7 +23,7 @@
       org.contikios.cooja.mspmote.SkyMoteType
       <identifier>sky1</identifier>
       <description>Sky Mote Type #sky1</description>
-      <firmware EXPORT="copy">[CONFIG_DIR]/tpwsn-rmh.sky</firmware>
+      <firmware EXPORT="copy">[CONTIKI_DIR]/tpwsn-rmh/tpwsn-rmh.sky</firmware>
       <moteinterface>org.contikios.cooja.interfaces.Position</moteinterface>
       <moteinterface>org.contikios.cooja.interfaces.RimeAddress</moteinterface>
       <moteinterface>org.contikios.cooja.interfaces.IPAddress</moteinterface>
@@ -65,7 +65,7 @@ WRITE_OUTPUT = false;
 * simulationStopTick - The simulation tick to stop the simulation at (and start collecting data)
 * failureMode - The mote failure mode for the sim
 **/
-load("/Users/david/Projects/contiki/tpwsn-rmh/params.js");
+load("params.js");
 
 // Java types
 var ArrayList = Java.type("java.util.ArrayList");

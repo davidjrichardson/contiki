@@ -41,41 +41,41 @@ else:
 memory_size = '-mx2048m'
 
 # Experiment params
-repeats = range(0, 1)
+repeats = range(0, 20)
 
 # Set the failure range per-compute node
-if hostname == 'grace-01':
-    experiment_delay_range = range(1, 6, 1)
-    experiment_max_fail_range = range(1, 9, 1)
-elif hostname == 'grace-02':
-    experiment_delay_range = range(6, 11, 1)
-    experiment_max_fail_range = range(1, 9, 1)
-elif hostname == 'grace-03':
-    experiment_delay_range = range(11, 16, 1)
-    experiment_max_fail_range = range(1, 9, 1)
-elif hostname == 'grace-04':
-    experiment_delay_range = range(16, 21, 1)
-    experiment_max_fail_range = range(1, 9, 1)
-elif hostname == 'grace-05':
-    experiment_delay_range = range(1, 6, 1)
-    experiment_max_fail_range = range(9, 17, 1)
-elif hostname == 'grace-06':
-    experiment_delay_range = range(6, 11, 1)
-    experiment_max_fail_range = range(9, 17, 1)
-elif hostname == 'grace-07':
-    experiment_delay_range = range(11, 16, 1)
-    experiment_max_fail_range = range(9, 17, 1)
-elif hostname == 'grace-08':
-    experiment_delay_range = range(16, 21, 1)
-    experiment_max_fail_range = range(9, 17, 1)
-else:
-    experiment_delay_range = range(1, 2, 1)
-    experiment_max_fail_range = range(1, 2, 1)
 
+if hostname == 'grace-04':
+    experiment_max_fail_range = range(1, 7, 2)
+elif hostname == 'grace-05':
+    experiment_max_fail_range = range(8, 13, 2)
+elif hostname == 'grace-06':
+    experiment_max_fail_range = range(14, 18, 2)
+else:
+    experiment_max_fail_range = range(1, 19, 2)
+# elif hostname == 'grace-04':
+#     experiment_delay_range = range(16, 21, 1)
+#     experiment_max_fail_range = range(1, 9, 1)
+# elif hostname == 'grace-05':
+#     experiment_delay_range = range(1, 6, 1)
+#     experiment_max_fail_range = range(9, 17, 1)
+# elif hostname == 'grace-06':
+#     experiment_delay_range = range(6, 11, 1)
+#     experiment_max_fail_range = range(9, 17, 1)
+# elif hostname == 'grace-07':
+#     experiment_delay_range = range(11, 16, 1)
+#     experiment_max_fail_range = range(9, 17, 1)
+# elif hostname == 'grace-08':
+#     experiment_delay_range = range(16, 21, 1)
+#     experiment_max_fail_range = range(9, 17, 1)
+# else:
+#     experiment_max_fail_range = range(1, 2, 1)
+
+experiment_delay_range = range(1, 17, 2)
 # Constant parameter space between nodes
 experiment_fail_modes = ["random", "location"]
 
-experiment_size = 15 # Number of motes along one axis (forms a square)
+experiment_size = 21 # Number of motes along one axis (forms a square)
 experiment_space = list(itertools.product(experiment_delay_range, experiment_fail_modes,
                                           experiment_max_fail_range, repeats))
 
@@ -211,10 +211,8 @@ def run_control(experiment):
     # Create a log file for this experiment
     logfile_handle = open(str(cooja_out), "w")
 
-    # TODO: There's an issue with loading the motes - will need to make a new sim file template
-
     os.chdir(str(param_dir))
-    subprocess.call(["java", memory_size, "-jar", "../../../../contiki-ng/tools/cooja/dist/cooja.jar", 
+    subprocess.call(["java", memory_size, "-jar", "../../../tools/cooja/dist/cooja.jar", 
                     "-nogui=sim.csc", "-contiki=../../.."], stdout=logfile_handle)
 
     # Create the key for the control data dict
@@ -310,7 +308,7 @@ def run_experiment(experiment, control_times):
         logfile_handle = open(str(cooja_out), "w")
 
         os.chdir(str(param_dir))
-        subprocess.call(["java", memory_size, "-jar", "../../../../contiki-ng/tools/cooja/dist/cooja.jar", 
+        subprocess.call(["java", memory_size, "-jar", "../../../tools/cooja/dist/cooja.jar", 
                         "-nogui=sim.csc", "-contiki=../../.."], stdout=logfile_handle)
 
         results = parse_experiment("COOJA.testlog")
@@ -350,7 +348,7 @@ if __name__ == "__main__":
     control_times = pool_manager.dict()
     experiment_func = functools.partial(run_experiment, control_times=control_times)
 
-    control_file = 'control_data-{host}.pickle'.format(host=hostname)
+    control_file = 'control_data.pickle'
 
     # Check if the control file exists - if it does then we can skip re-running the experiments
     os.chdir(str(abs_dir))
@@ -385,27 +383,25 @@ if __name__ == "__main__":
                 control_times[key] = control_times.setdefault(key, []) + [tick]
                 control_results[key].append(result)
 
-        # with open(control_file, 'wb') as handle:
-        #     pickle.dump(control_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        with open(control_file, 'wb') as handle:
+            pickle.dump(control_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     # Run the test sims
     print("Running experiments")
-    print(control_results)
-    # os.chdir(str(experiment_dir))
-    # with Pool(num_threads) as p:
-    #     results = list(tqdm.tqdm(p.imap(experiment_func, experiment_space), total=len(experiment_space)))
-    #     # TODO: Serialise the experiment_space so we can resume 
+    os.chdir(str(experiment_dir))
+    with Pool(num_threads) as p:
+        results = list(tqdm.tqdm(p.imap(experiment_func, experiment_space), total=len(experiment_space)))
 
-    # # Collate the experiment results
-    # experimental_results = defaultdict(list)
-    # for key, result in results:
-    #     experimental_results[key].append(result)
+    # Collate the experiment results
+    experimental_results = defaultdict(list)
+    for key, result in results:
+        experimental_results[key].append(result)
 
-    # # Save the data
-    # os.chdir(str(abs_dir))
+    # Save the data
+    os.chdir(str(abs_dir))
         
-    # with open('results_data-{host}.pickle'.format(host=hostname), 'wb') as handle:
-    #     pickle.dump(experimental_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    with open('results_data-{host}.pickle'.format(host=hostname), 'wb') as handle:
+        pickle.dump(experimental_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     end_time = datetime.datetime.now()
     total_time = end_time - start_time

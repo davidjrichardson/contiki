@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "cc.h": "c",
+        "announcement.h": "c",
+        "list.h": "c",
+        "linkaddr.h": "c"
+    }
+}

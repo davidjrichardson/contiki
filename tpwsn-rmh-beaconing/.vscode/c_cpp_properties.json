@@ -7,8 +7,7 @@
                 "/Users/david/Projects/contiki/core",
                 "/Users/david/Projects/contiki/apps",
                 "/Users/david/Projects/contiki/cpu",
-                "/Users/david/Projects/contiki/lib",
-                "/Users/david/Projects/contiki/platform/*"
+                "/Users/david/Projects/contiki/lib"
             ]
         }
     ]

@@ -9,7 +9,8 @@
 			"contiki.h": "c",
 			"contiki-conf.h": "c",
 			"process.h": "c",
-			"netstack.h": "c"
+			"netstack.h": "c",
+			"rime.h": "c"
 		}
 	}
 }

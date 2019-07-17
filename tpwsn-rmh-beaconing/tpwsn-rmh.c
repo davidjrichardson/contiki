@@ -74,9 +74,11 @@
 
 #include "net/netstack.h"
 #include "net/rime/rime.h"
+#include "net/rime/broadcast.h"
 
 #include "lib/list.h"
 #include "lib/memb.h"
+#include "lib/mmem.h"
 #include "lib/random.h"
 
 #include "dev/button-sensor.h"
@@ -87,14 +89,46 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#define CHANNEL 135
+#define MHOP_CHANNEL 135
+#define BCAST_CHANNEL 129
+#define UCAST_CHANNEL 144
 
 // The message that was received (for coverage purposes)
 #define DATA_BUF_SIZE 6
-static char *data_buf;
+static char data_buf[DATA_BUF_SIZE];
+static short data_ver;
 // The restart delay timer
 static struct etimer rt;
 static bool reset_scheduled = false;
+
+// --- TPWSN Modification vars/structs
+static struct mmem mmem;
+
+static struct etimer beacon;
+static bool should_beacon = true;
+static short beacon_delay = 5;
+
+#define MSG_TYPE_CTRL 1
+#define MSG_TYPE_RECOVER 2
+
+struct __attribute__ ((__packed__)) beacon_msg_s {
+  short msg_version;
+};
+typedef struct beacon_msg_s beacon_msg_t;
+
+struct __attribute__ ((__packed__)) ctrl_msg_s {
+  short msg_type;
+  short msg_version;
+};
+typedef struct ctrl_msg_s ctrl_msg_t;
+
+struct __attribute__ ((__packed__)) recov_msg_s {
+  short msg_type;
+  short msg_version;
+  char msg_data[DATA_BUF_SIZE];
+};
+typedef struct recov_msg_s recov_msg_t;
+// --- TPWSN Vars/structs end
 
 struct example_neighbor {
   struct example_neighbor *next;
@@ -172,9 +206,12 @@ recv(struct multihop_conn *c, const linkaddr_t *sender,
      uint8_t hops)
 {
   // Store the data locally for coverage metrics
-  memcpy(data_buf, packetbuf_dataptr(), DATA_BUF_SIZE);
+  recov_msg_t *msg = (recov_msg_t *) packetbuf_dataptr();
+  memcpy(&data_buf, msg->msg_data, DATA_BUF_SIZE);
+  // strcpy(&data_buf, msg->msg_data);
+  data_ver = msg->msg_version;
 
-  printf("sink received '%s'\n", (char *)packetbuf_dataptr());
+  printf("sink received '%s'\n", data_buf);
 }
 /*
  * This function is called to forward a packet. The function picks a
@@ -188,15 +225,18 @@ forward(struct multihop_conn *c,
 	const linkaddr_t *originator, const linkaddr_t *dest,
 	const linkaddr_t *prevhop, uint8_t hops)
 {
-  printf("multihop message received '%s'\n", (char *)packetbuf_dataptr());
+  recov_msg_t *msg = (recov_msg_t *) packetbuf_dataptr();
+  memcpy(&data_buf, msg->msg_data, DATA_BUF_SIZE);
+  // strcpy(&data_buf, msg->msg_data);
+  data_ver = msg->msg_version;
+
+  printf("multihop message received '%s'\n", data_buf);
   
   /* Find a random neighbor to send to. */
   int num, i;
   struct example_neighbor *n;
 
   // Store the data locally for coverage metrics
-  memcpy(data_buf, packetbuf_dataptr(), DATA_BUF_SIZE);
-
   if(list_length(neighbor_table) > 0) {
     num = random_rand() % list_length(neighbor_table);
     i = 0;
@@ -245,7 +285,7 @@ reset(long restart_delay) {
     packetbuf_clear();
 
     // Clear the message on this mote
-    data_buf = NULL;
+    memset(data_buf, 0, DATA_BUF_SIZE);
 
     // Turn off the radio stack
     NETSTACK_RADIO.off();
@@ -259,9 +299,97 @@ reset(long restart_delay) {
 }
 /*---------------------------------------------------------------------------*/
 static void
+send_runicast(struct runicast_conn *c, const linkaddr_t *to, uint8_t retransmissions) {
+  printf("runicast message sent to %d.%d, retransmissions %d\n",
+        to->u8[0], to->u8[1], retransmissions);
+}
+static void
+recv_runicast(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno) {
+  // TODO: Differentiate between the message types
+}
+static void
+timedout_runicast(struct runicast_conn *c, const linkaddr_t *to, uint8_t retransmissions) {
+  printf("runicast message timed out when sending to %d.%d, retransmissions %d\n",
+        to->u8[0], to->u8[1], retransmissions);
+}
+static const struct runicast_callbacks runicast_callbacks = {recv_runicast, 
+  send_runicast, timedout_runicast};
+static struct runicast_conn runicast;
+/*---------------------------------------------------------------------------*/
+static void 
+tpwsn_init() {
+  int timer_offset = random_rand() % 5; // 5 seconds of variance
+
+  etimer_set(&beacon, CLOCK_SECOND * (beacon_delay + timer_offset));
+}
+/*---------------------------------------------------------------------------*/
+static void
+send_recovery_control(const linkaddr_t *recv) {
+  printf("sending recovery ctrl msg to %d.%d\n", recv->u8[0], recv->u8[1]);
+  
+  ctrl_msg_t msg = {MSG_TYPE_CTRL, data_ver};
+  packetbuf_copyfrom(&msg, sizeof(ctrl_msg_t));
+  runicast_send(&runicast, recv, 255); // Max retransmissions
+}
+/*---------------------------------------------------------------------------*/
+static void
+send_recovery_data(const linkaddr_t *recv) {
+  printf("sending recovery data msg of %s to %d.%d\n", data_buf, recv->u8[0], recv->u8[1]);
+
+  recov_msg_t msg;
+  msg.msg_type = MSG_TYPE_RECOVER;
+  msg.msg_version = data_ver;
+  memcpy(msg.msg_data, data_buf, DATA_BUF_SIZE);
+
+  packetbuf_copyfrom(&msg, sizeof(recov_msg_t));
+  runicast_send(&runicast, recv, 255); // Max retransmissions
+}
+/*---------------------------------------------------------------------------*/
+static void
+broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from) {
+  printf("broadcast message received from %d.%d\n", from->u8[0], from->u8[1]);
+  // Check the message for the version received
+  beacon_msg_t *msg = (beacon_msg_t *) packetbuf_dataptr();
+  if (msg->msg_version == data_ver) {
+    printf("Data versions consistent\n");
+  } else if (msg->msg_version > data_ver) {
+    printf("Theirs is newer, starting data recovery\n");
+    printf("Ours: %d, theirs: %d\n", data_ver, msg->msg_version);
+    send_recovery_control(from);
+  } else if (msg->msg_version < data_ver) {
+    printf("Ours is newer, sending update\n");
+    printf("Ours: %d, theirs: %d\n", data_ver, msg->msg_version);
+    send_recovery_data(from);
+  }
+}
+static const struct broadcast_callbacks broadcast_call = {broadcast_recv};
+static struct broadcast_conn broadcast;
+/*---------------------------------------------------------------------------*/
+static void
+beacon_data() {
+  if (mmem_alloc(&mmem, sizeof(beacon_msg_t)) == 0) {
+    printf("Memory allocation failed for beacon\n");
+  } else {
+    // Allocate the beacon msg
+    beacon_msg_t *beacon = (beacon_msg_t *) MMEM_PTR(&mmem);
+    beacon->msg_version = data_ver;
+
+    // Send it to the link-local neighbourhood
+    packetbuf_copyfrom(beacon, sizeof(beacon_msg_t));
+    broadcast_send(&broadcast);
+    printf("%d.%d: Sent beacon at time %ld\n", linkaddr_node_addr.u8[0], linkaddr_node_addr.u8[1], 
+        clock_time());
+
+    // Free the allocated memory
+    mmem_free(&mmem);
+  }
+}
+/*---------------------------------------------------------------------------*/
+static void
 initialise(void) {
   // Initialise the data buffer
-  data_buf = (char *) malloc(DATA_BUF_SIZE * sizeof(char));
+  memset(data_buf, 0, DATA_BUF_SIZE);
+  data_ver = -1;
   
   /* Initialize the memory for the neighbor table entries. */
   memb_init(&neighbor_mem);
@@ -269,14 +397,22 @@ initialise(void) {
   /* Initialize the list used for the neighbor table. */
   list_init(neighbor_table);
 
+  /* Intitialise the mmem allocator */
+  mmem_init();
+
   /* Open a multihop connection on Rime channel CHANNEL. */
-  multihop_open(&multihop, CHANNEL, &multihop_call);
+  multihop_open(&multihop, MHOP_CHANNEL, &multihop_call);
+
+  /* Open up the broadcasting connection */
+  broadcast_open(&broadcast, BCAST_CHANNEL, &broadcast_call);
+
+  /* Open up the reliable unicast connection for state recovery */
+  runicast_open(&runicast, UCAST_CHANNEL, &runicast_callbacks);
 
   /* Register an announcement with the same announcement ID as the
      Rime channel we use to open the multihop connection above. */
   announcement_register(&example_announcement,
-			CHANNEL,
-			received_announcement);
+			MHOP_CHANNEL, received_announcement);
 
   /* Set a dummy value to start sending out announcments. */
   announcement_set_value(&example_announcement, 0);
@@ -285,6 +421,7 @@ initialise(void) {
 static void
 restart_node(void) {
   etimer_stop(&rt);
+  etimer_stop(&beacon);
   reset_scheduled = false;
   NETSTACK_RADIO.on();
   initialise();
@@ -330,14 +467,11 @@ serial_handler(char *data) {
   }
 }
 /*---------------------------------------------------------------------------*/
-/**
- * TODO:
- * - Modify broadcast-announcement.c and rime.c to make announcement period configurable
- **/
-/*---------------------------------------------------------------------------*/
 PROCESS_THREAD(example_multihop_process, ev, data)
 {
   PROCESS_EXITHANDLER(multihop_close(&multihop);)
+  PROCESS_EXITHANDLER(broadcast_close(&broadcast);)
+  PROCESS_EXITHANDLER(runicast_close(&runicast);)
     
   PROCESS_BEGIN();
 
@@ -346,6 +480,9 @@ PROCESS_THREAD(example_multihop_process, ev, data)
 
   // Initialise the serial line
   serial_line_init();
+
+  // TPWSN init
+  tpwsn_init();
 
   /* Activate the button sensor. We use the button to drive traffic -
      when the button is pressed, a packet is sent. */
@@ -359,8 +496,19 @@ PROCESS_THREAD(example_multihop_process, ev, data)
 
     if (ev == sensors_event && data == &button_sensor) {
       printf("Button pressed, starting RMH bcast\n");
+
       /* Copy the "Hello" to the packet buffer. */
-      packetbuf_copyfrom("hello", DATA_BUF_SIZE);
+      memcpy(&data_buf, "hello", DATA_BUF_SIZE);
+
+      data_ver = 1;
+      recov_msg_t msg;
+      msg.msg_type = MSG_TYPE_RECOVER;
+      msg.msg_version = data_ver;
+      memcpy(msg.msg_data, &data_buf, DATA_BUF_SIZE);
+
+      printf("msg: %s, ver: %d, type: %d\n", msg.msg_data, msg.msg_version, msg.msg_type);
+
+      packetbuf_copyfrom(&msg, sizeof(recov_msg_t));
 
       /* Set the Rime address of the final receiver of the packet to
          1.0. This is a value that happens to work nicely in a Cooja
@@ -376,6 +524,10 @@ PROCESS_THREAD(example_multihop_process, ev, data)
     } else if (etimer_expired(&rt) && reset_scheduled) {
       printf("Restarting node at time %lu\n", (unsigned long) clock_time());
       restart_node();
+    } else if (etimer_expired(&beacon) && should_beacon) {
+      printf("Beaconing to neighbours\n");
+      beacon_data();
+      etimer_set(&beacon, beacon_delay * CLOCK_SECOND);
     }
   }
 
